@@ -378,6 +378,42 @@
       font-size: 1.08rem;
       margin-top: 4px;
     }
+    .market-read {
+      max-width: 760px;
+      margin: 0 0 22px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+      padding: 14px 16px;
+    }
+    .market-read p {
+      margin-top: 8px;
+      color: var(--ink);
+      font-size: 0.92rem;
+      line-height: 1.45;
+    }
+    .market-read-meta, .market-read-note {
+      color: var(--muted) !important;
+      font-size: 0.78rem !important;
+    }
+    .market-read ul {
+      margin: 10px 0 0;
+      padding-left: 18px;
+      color: var(--ink);
+      font-size: 0.86rem;
+      line-height: 1.4;
+    }
+    .market-read-sources {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .market-read-source {
+      color: var(--accent);
+      font-size: 0.78rem;
+      font-weight: 650;
+    }
     .heatmap-intro {
       display: flex;
       align-items: end;
@@ -665,6 +701,7 @@
       summary.appendChild(metric("Both teams score", match.btts_yes));
       summary.appendChild(metric("One or both score 0", match.btts_no));
       detail.appendChild(summary);
+      detail.appendChild(renderMarketRead(match));
 
       const heatmapIntro = document.createElement("div");
       heatmapIntro.className = "heatmap-intro";
@@ -710,6 +747,80 @@
           heatmap.appendChild(node);
         });
       });
+    }
+
+    function renderMarketRead(match) {
+      const read = match.market_read || {};
+      const card = document.createElement("section");
+      card.className = "market-read";
+      card.setAttribute("aria-label", "Betting market read");
+
+      const title = document.createElement("h3");
+      title.textContent = "Betting market read";
+      card.appendChild(title);
+
+      if (read.updated_at) {
+        const meta = document.createElement("p");
+        meta.className = "market-read-meta";
+        meta.textContent = `Updated ${read.updated_at}`;
+        card.appendChild(meta);
+      }
+
+      const summary = document.createElement("p");
+      summary.textContent =
+        typeof read.summary === "string" && read.summary.trim()
+          ? read.summary
+          : "No researched market read has been published for this match yet.";
+      card.appendChild(summary);
+
+      const bullets = Array.isArray(read.bullets)
+        ? read.bullets.filter((item) => typeof item === "string" && item.trim())
+        : [];
+      if (bullets.length > 0) {
+        const listNode = document.createElement("ul");
+        bullets.forEach((item) => {
+          const bullet = document.createElement("li");
+          bullet.textContent = item;
+          listNode.appendChild(bullet);
+        });
+        card.appendChild(listNode);
+      }
+
+      const sources = Array.isArray(read.sources) ? read.sources : [];
+      const sourceList = document.createElement("div");
+      sourceList.className = "market-read-sources";
+      sources.forEach((source) => {
+        const url = safeHttpUrl(source && source.url);
+        if (!url) {
+          return;
+        }
+        const link = document.createElement("a");
+        link.className = "market-read-source";
+        link.href = url;
+        link.target = "_blank";
+        link.rel = "noopener";
+        link.textContent =
+          typeof source.label === "string" && source.label.trim() ? source.label : url;
+        sourceList.appendChild(link);
+      });
+      if (sourceList.children.length > 0) {
+        card.appendChild(sourceList);
+      }
+
+      const note = document.createElement("p");
+      note.className = "market-read-note";
+      note.textContent = "Not betting advice. Public market prices can move quickly.";
+      card.appendChild(note);
+      return card;
+    }
+
+    function safeHttpUrl(raw) {
+      try {
+        const url = new URL(String(raw));
+        return ["http:", "https:"].includes(url.protocol) ? url.href : null;
+      } catch {
+        return null;
+      }
     }
 
     function renderTabs(index) {
