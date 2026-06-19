@@ -164,6 +164,31 @@
     .match-button.active .match-button-meta {
       color: rgba(255, 255, 255, 0.82);
     }
+    .match-button-score {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 9px;
+      padding-top: 9px;
+      border-top: 1px solid rgba(70, 94, 87, 0.18);
+      font-size: 0.78rem;
+      line-height: 1.25;
+      color: var(--ink);
+      font-weight: 750;
+    }
+    .match-button-score span:last-child {
+      color: var(--muted);
+      font-weight: 650;
+      white-space: nowrap;
+    }
+    .match-button.active .match-button-score {
+      border-top-color: rgba(255, 255, 255, 0.24);
+      color: var(--accent-ink);
+    }
+    .match-button.active .match-button-score span:last-child {
+      color: rgba(255, 255, 255, 0.78);
+    }
     .kind-pill {
       border: 1px solid var(--line);
       border-radius: 999px;
@@ -181,15 +206,17 @@
       max-width: 980px;
     }
     .score-callout {
-      display: flex;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
       align-items: center;
       justify-content: space-between;
-      gap: 18px;
-      margin-top: 18px;
+      gap: 12px 24px;
+      margin-top: 16px;
       border: 1px solid var(--accent-mid);
+      border-left: 6px solid var(--accent);
       border-radius: 12px;
-      background: var(--accent-soft);
-      padding: 16px 18px;
+      background: var(--panel);
+      padding: 18px 20px;
     }
     .score-callout-label {
       color: var(--accent);
@@ -197,11 +224,19 @@
       font-weight: 750;
     }
     .score-callout-value {
-      margin-top: 3px;
-      font-size: 2.1rem;
+      margin-top: 4px;
+      font-size: 3.15rem;
       line-height: 1;
       font-weight: 800;
       letter-spacing: 0;
+    }
+    .score-callout-teams {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.35;
+      font-weight: 650;
+      overflow-wrap: anywhere;
     }
     .score-callout-chance {
       color: var(--muted);
@@ -431,7 +466,7 @@
       h2 { font-size: 1.35rem; }
       .score-callout {
         align-items: flex-start;
-        flex-direction: column;
+        grid-template-columns: 1fr;
         gap: 10px;
       }
       .score-callout-chance { text-align: left; }
@@ -523,6 +558,20 @@
         label.appendChild(statusNode);
         button.appendChild(label);
 
+        const scoreLine = document.createElement("span");
+        scoreLine.className = "match-button-score";
+        const scoreText = document.createElement("span");
+        scoreText.textContent = hasPlaceholderTeam(match)
+          ? "Teams pending"
+          : `Likely ${match.peak_score.home}-${match.peak_score.away}`;
+        scoreLine.appendChild(scoreText);
+        const scoreChance = document.createElement("span");
+        scoreChance.textContent = hasPlaceholderTeam(match)
+          ? "No score yet"
+          : pct(match.peak_score.probability);
+        scoreLine.appendChild(scoreChance);
+        button.appendChild(scoreLine);
+
         button.addEventListener("click", () => renderMatch(index));
         list.appendChild(button);
       });
@@ -561,12 +610,11 @@
         return;
       }
 
-      const summaryCopy = document.createElement("p");
-      summaryCopy.className = "match-summary";
-      summaryCopy.textContent = matchSummary(match);
-      detail.appendChild(summaryCopy);
-
       if (hasPlaceholderTeam(match)) {
+        const summaryCopy = document.createElement("p");
+        summaryCopy.className = "match-summary";
+        summaryCopy.textContent = matchSummary(match);
+        detail.appendChild(summaryCopy);
         const placeholder = document.createElement("div");
         placeholder.className = "empty";
         placeholder.textContent =
@@ -586,6 +634,12 @@
       scoreValue.className = "score-callout-value";
       scoreValue.textContent = `${match.peak_score.home}-${match.peak_score.away}`;
       scoreMain.appendChild(scoreValue);
+      const scoreTeams = document.createElement("div");
+      scoreTeams.className = "score-callout-teams";
+      scoreTeams.textContent =
+        `${match.home_team} ${match.peak_score.home} · ` +
+        `${match.away_team} ${match.peak_score.away}`;
+      scoreMain.appendChild(scoreTeams);
       scoreCallout.appendChild(scoreMain);
       const scoreChance = document.createElement("p");
       scoreChance.className = "score-callout-chance";
@@ -597,6 +651,11 @@
           `with ${pct(match.peak_score.probability)} chance from the model`,
       );
       detail.appendChild(scoreCallout);
+
+      const summaryCopy = document.createElement("p");
+      summaryCopy.className = "match-summary";
+      summaryCopy.textContent = matchSummary(match);
+      detail.appendChild(summaryCopy);
 
       const summary = document.createElement("div");
       summary.className = "summary";
@@ -614,7 +673,8 @@
       heatmapIntro.appendChild(heatmapTitle);
       const heatmapNote = document.createElement("p");
       heatmapNote.className = "heatmap-note";
-      heatmapNote.textContent = "Rows are home goals. Columns are away goals.";
+      heatmapNote.textContent =
+        `${match.home_team} goals run down. ${match.away_team} goals run across.`;
       heatmapIntro.appendChild(heatmapNote);
       detail.appendChild(heatmapIntro);
 
@@ -628,16 +688,17 @@
       heatmap.id = "heatmap";
       heatmap.setAttribute(
         "aria-label",
-        "Score chance heatmap. Rows are home goals and columns are away goals.",
+        `Score chance heatmap. Rows are ${match.home_team} goals ` +
+          `and columns are ${match.away_team} goals.`,
       );
       heatmapScroll.appendChild(heatmap);
 
-      heatmap.appendChild(cell("", "axis"));
+      heatmap.appendChild(cell("Goals", "axis"));
       for (let away = 0; away < cols; away += 1) {
-        heatmap.appendChild(cell(`Away ${away}`, "axis"));
+        heatmap.appendChild(cell(String(away), "axis"));
       }
       match.score_grid.forEach((row, home) => {
-        heatmap.appendChild(cell(`Home ${home}`, "axis"));
+        heatmap.appendChild(cell(String(home), "axis"));
         row.forEach((probability, away) => {
           const node = cell(`${home}-${away}\n${pct(probability)}`, "probability");
           const alpha = heatAlpha(probability, maxProbability);
@@ -697,7 +758,10 @@
         ["Past scores", "Use only matches before this date."],
         ["Scoring rates", "Estimate how often each side scores and concedes."],
         ["Poisson curves", "Turn goal rates into 0, 1, 2, 3... goal chances."],
-        ["Score grid", "Combine home and away goal chances into exact scores."],
+        [
+          "Score grid",
+          `Combine ${match.home_team} and ${match.away_team} goal chances into exact scores.`,
+        ],
       ].forEach(([heading, copy]) => {
         const step = document.createElement("div");
         step.className = "model-step";
@@ -718,8 +782,8 @@
       panel.appendChild(visuals);
 
       [
-        "The heatmap shows exact-score probabilities. Rows are home goals and columns are " +
-          "away goals.",
+        `The heatmap shows exact-score probabilities. ${match.home_team} goals run ` +
+          `down the rows; ${match.away_team} goals run across the columns.`,
         "The numbers are model probabilities, not betting advice or proof of an edge.",
       ].forEach((text) => {
         const paragraph = document.createElement("p");
