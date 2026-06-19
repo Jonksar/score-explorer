@@ -464,7 +464,7 @@
       <div class="legend sidebar-legend" aria-hidden="true">
         <span>Lower chance</span>
         <span class="legend-scale">
-          <span class="legend-swatch" style="--alpha: 0.16"></span>
+          <span class="legend-swatch" style="--alpha: 0; background: var(--panel)"></span>
           <span class="legend-swatch" style="--alpha: 0.28"></span>
           <span class="legend-swatch" style="--alpha: 0.44"></span>
           <span class="legend-swatch" style="--alpha: 0.62"></span>
@@ -490,6 +490,14 @@
 
     function pct(value) {
       return `${(value * 100).toFixed(1)}%`;
+    }
+
+    function heatAlpha(probability, maxProbability) {
+      if (probability < 0.005 || maxProbability <= 0) {
+        return 0;
+      }
+      const intensity = probability / maxProbability;
+      return Math.min(0.66, 0.1 + intensity * 0.56);
     }
 
     function renderList(selectedIndex) {
@@ -631,9 +639,9 @@
       match.score_grid.forEach((row, home) => {
         heatmap.appendChild(cell(`Home ${home}`, "axis"));
         row.forEach((probability, away) => {
-          const intensity = Math.max(0.08, probability / maxProbability);
           const node = cell(`${home}-${away}\n${pct(probability)}`, "probability");
-          node.style.background = `rgba(var(--heat), ${0.08 + intensity * 0.58})`;
+          const alpha = heatAlpha(probability, maxProbability);
+          node.style.background = alpha === 0 ? "var(--panel)" : `rgba(var(--heat), ${alpha})`;
           node.title = `${home}-${away}: ${pct(probability)}`;
           if (home === match.peak_score.home && away === match.peak_score.away) {
             node.classList.add("highest-probability");
@@ -781,10 +789,9 @@
           const probability = match.score_grid[home][away];
           const cell = document.createElement("span");
           cell.className = "mini-cell";
-          cell.style.setProperty(
-            "--alpha",
-            String(0.12 + Math.max(0.04, probability / maxProbability) * 0.58),
-          );
+          const alpha = heatAlpha(probability, maxProbability);
+          cell.style.setProperty("--alpha", String(alpha));
+          cell.style.background = alpha === 0 ? "var(--panel)" : `rgba(var(--heat), ${alpha})`;
           cell.title = `${home}-${away}: ${pct(probability)}`;
           grid.appendChild(cell);
         }
