@@ -112,6 +112,10 @@
       flex-direction: column;
       gap: 8px;
       margin-top: 10px;
+      max-height: calc(100vh - 230px);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding-right: 2px;
     }
     .match-button {
       width: 100%;
@@ -246,6 +250,75 @@
       padding: 16px;
     }
     .methodology p + p { margin-top: 10px; }
+    .model-flow {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(120px, 1fr));
+      gap: 8px;
+      margin: 16px 0;
+    }
+    .model-step {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #f7fbf9;
+      padding: 12px;
+    }
+    .model-step strong {
+      display: block;
+      font-size: 0.88rem;
+      line-height: 1.25;
+    }
+    .model-step span {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      line-height: 1.35;
+    }
+    .method-visuals {
+      display: grid;
+      grid-template-columns: minmax(260px, 1fr) minmax(220px, 0.85fr);
+      gap: 14px;
+      margin-top: 14px;
+    }
+    .method-card {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #f8fbf9;
+      padding: 14px;
+    }
+    .method-card h3 { margin-bottom: 10px; }
+    .goal-bars {
+      display: grid;
+      gap: 7px;
+    }
+    .goal-bar-row {
+      display: grid;
+      grid-template-columns: 54px 1fr 48px;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.78rem;
+    }
+    .bar-track {
+      height: 10px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: var(--accent);
+    }
+    .mini-heatmap {
+      display: grid;
+      grid-template-columns: repeat(var(--mini-cols), 1fr);
+      gap: 2px;
+    }
+    .mini-cell {
+      aspect-ratio: 1;
+      border-radius: 4px;
+      background: rgba(var(--heat), var(--alpha));
+    }
     .summary {
       display: flex;
       flex-wrap: wrap;
@@ -368,6 +441,8 @@
         gap: 4px;
       }
       .heatmap-note { text-align: left; }
+      .match-list { max-height: 220px; }
+      .model-flow, .method-visuals { grid-template-columns: 1fr; }
       .score-heatmap {
         grid-template-columns: 42px repeat(var(--cols), minmax(42px, 1fr));
       }
@@ -594,10 +669,47 @@
     function renderMethodology(match) {
       const panel = document.createElement("div");
       panel.className = "methodology";
+      const title = document.createElement("h3");
+      title.textContent = "How this model turns scores into chances";
+      panel.appendChild(title);
+
       [
         "This explorer uses an independent Poisson score model.",
         `For ${match.home_team} vs ${match.away_team}, it trains only on scored matches ` +
           `dated before ${match.date}.`,
+      ].forEach((text) => {
+        const paragraph = document.createElement("p");
+        paragraph.textContent = text;
+        panel.appendChild(paragraph);
+      });
+
+      const flow = document.createElement("div");
+      flow.className = "model-flow";
+      [
+        ["Past scores", "Use only matches before this date."],
+        ["Scoring rates", "Estimate how often each side scores and concedes."],
+        ["Poisson curves", "Turn goal rates into 0, 1, 2, 3... goal chances."],
+        ["Score grid", "Combine home and away goal chances into exact scores."],
+      ].forEach(([heading, copy]) => {
+        const step = document.createElement("div");
+        step.className = "model-step";
+        const strong = document.createElement("strong");
+        strong.textContent = heading;
+        step.appendChild(strong);
+        const span = document.createElement("span");
+        span.textContent = copy;
+        step.appendChild(span);
+        flow.appendChild(step);
+      });
+      panel.appendChild(flow);
+
+      const visuals = document.createElement("div");
+      visuals.className = "method-visuals";
+      visuals.appendChild(renderGoalBars(match));
+      visuals.appendChild(renderMiniHeatmap(match));
+      panel.appendChild(visuals);
+
+      [
         "The heatmap shows exact-score probabilities. Rows are home goals and columns are " +
           "away goals.",
         "The numbers are model probabilities, not betting advice or proof of an edge.",
@@ -607,6 +719,78 @@
         panel.appendChild(paragraph);
       });
       detail.appendChild(panel);
+    }
+
+    function renderGoalBars(match) {
+      const card = document.createElement("div");
+      card.className = "method-card";
+      const title = document.createElement("h3");
+      title.textContent = "Goal curves";
+      card.appendChild(title);
+      const bars = document.createElement("div");
+      bars.className = "goal-bars";
+      const homeGoals = match.score_grid.map((row) =>
+        row.reduce((total, probability) => total + probability, 0)
+      );
+      const awayGoals = match.score_grid[0].map((_, away) =>
+        match.score_grid.reduce((total, row) => total + row[away], 0)
+      );
+      const visibleGoals = Math.min(5, homeGoals.length);
+      for (let goal = 0; goal < visibleGoals; goal += 1) {
+        bars.appendChild(goalBar(`${goal} goals`, homeGoals[goal], match.home_team));
+        bars.appendChild(goalBar(`${goal} goals`, awayGoals[goal], match.away_team));
+      }
+      card.appendChild(bars);
+      return card;
+    }
+
+    function goalBar(label, probability, team) {
+      const row = document.createElement("div");
+      row.className = "goal-bar-row";
+      const labelNode = document.createElement("span");
+      labelNode.textContent = label;
+      row.appendChild(labelNode);
+      const track = document.createElement("span");
+      track.className = "bar-track";
+      track.title = `${team} ${label}: ${pct(probability)}`;
+      const fill = document.createElement("span");
+      fill.className = "bar-fill";
+      fill.style.width = `${Math.min(100, probability * 100).toFixed(1)}%`;
+      track.appendChild(fill);
+      row.appendChild(track);
+      const value = document.createElement("span");
+      value.textContent = pct(probability);
+      row.appendChild(value);
+      return row;
+    }
+
+    function renderMiniHeatmap(match) {
+      const card = document.createElement("div");
+      card.className = "method-card";
+      const title = document.createElement("h3");
+      title.textContent = "Score grid";
+      card.appendChild(title);
+      const grid = document.createElement("div");
+      grid.className = "mini-heatmap";
+      const rows = Math.min(5, match.score_grid.length);
+      const cols = Math.min(5, match.score_grid[0].length);
+      grid.style.setProperty("--mini-cols", String(cols));
+      const maxProbability = match.peak_score.probability;
+      for (let home = 0; home < rows; home += 1) {
+        for (let away = 0; away < cols; away += 1) {
+          const probability = match.score_grid[home][away];
+          const cell = document.createElement("span");
+          cell.className = "mini-cell";
+          cell.style.setProperty(
+            "--alpha",
+            String(0.12 + Math.max(0.04, probability / maxProbability) * 0.58),
+          );
+          cell.title = `${home}-${away}: ${pct(probability)}`;
+          grid.appendChild(cell);
+        }
+      }
+      card.appendChild(grid);
+      return card;
     }
 
     function matchSummary(match) {
